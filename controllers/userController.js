@@ -56,9 +56,9 @@ export async function loginUser(req, res) {
 
             }
 
-            const token = jwt.sign( userInfo , process.env.JWT_SECRET);
+            const token = jwt.sign( userInfo , "com345#89@");
 
-            res.json({ token: token });
+            res.json({ token: token, isAdmin: user.isAdmin });
         } else {
             res.status(401).json({ message: "Invalid password" });
         }
