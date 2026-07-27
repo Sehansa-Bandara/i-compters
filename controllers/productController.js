@@ -4,9 +4,9 @@ import Product from "../models/product.js";
 import authenticates from "../middlewares/authenticates.js";
 
 function isAdmin(req) {
-    return true ;
+    return true;
 }
-    
+
 
 
 
@@ -30,8 +30,8 @@ export async function createProduct(req, res) {
 
 export async function getAllProducts(req, res) {
     try {
-        
-        if (isAdmin(req)) { 
+
+        if (isAdmin(req)) {
             const products = await Product.find();
             res.json(products);
 
@@ -52,16 +52,16 @@ export async function deleteProduct(req, res) {
         const productId = req.params.productId;
 
         if (isAdmin(req)) {
-          const deletedProduct = await Product.findOne({ productId: productId })
-            
-            if (product == null) {
+            const deletedProduct = await Product.findOne({ productId: productId })
 
-             res.status(404).json({ message: "Product does not exist" });
-             return
+            if (deletedProduct == null) {
+
+                res.status(404).json({ message: "Product does not exist" });
+                return
 
             }
             await Product.findOneAndDelete({ productId: productId });
-            
+
             return res.json({ message: "Product deleted successfully" });
         } else {
             return res.status(403).json({ message: "You need to login as an admin to delete a product" });
@@ -75,23 +75,23 @@ export async function deleteProduct(req, res) {
 export async function updateProduct(req, res) {
     try {
         const productId = req.params.productId;
-        
+
         if (isAdmin(req)) {
-            const Product = await Product.findOne({ productId: productId })
-            
-            if (product == null) {
-                 res.status(404).json({ message: "Product does not exist" });
-                    return
+            const productToUpdate = await Product.findOne({ productId: productId })
+
+            if (productToUpdate == null) {
+                res.status(404).json({ message: "Product does not exist" });
+                return
             }
             await Product.findOneAndUpdate({ productId: productId }, req.body)
-             return res.json({ message: "Product updated successfully" });
+            return res.json({ message: "Product updated successfully" });
         } else {
 
 
             res.status(403).json({ message: "You need to login as an admin to update a product" });
             return
         }
-       
+
 
     } catch (error) {
         console.error("Error updating product:", error);
@@ -100,35 +100,35 @@ export async function updateProduct(req, res) {
 }
 export async function getProductById(req, res) {
 
-    try{
+    try {
 
         const productId = req.params.productId
 
-        const product = await Product.findOne({ productId : productId })
+        const product = await Product.findOne({ productId: productId })
 
-        if(product == null){
+        if (product == null) {
             res.status(404).json({ message: "Product does not exist" });
             return
         }
 
-        if(product.isAvailable){
+        if (product.isAvailable) {
 
             res.json(product);
 
-        }else{
+        } else {
 
-            if(isAdmin(req)){
+            if (isAdmin(req)) {
 
                 res.json(product);
 
-            }else{
+            } else {
                 res.status(404).json({ message: "Product does not exist" });
                 return
             }
 
         }
 
-    }catch(error){
+    } catch (error) {
         console.error("Error fetching product:", error);
         return res.status(500).json({ message: "Internal server error" });
     }
