@@ -2,6 +2,8 @@ import express from 'express'
 import mongoose from 'mongoose'
 import userRouter from './routes/userRouter.js'
 import cors from 'cors'
+import orderRouter from './routes/orderRouter.js'
+
 
 import productRouter from './routes/productRouter.js' 
 import dotenv from 'dotenv'
@@ -47,6 +49,7 @@ app.use("/users", userRouter)
 
 
 app.use("/products", productRouter) 
+app.use("/orders" , orderRouter)
 
 app.listen(3000,
      () => console.log("Server is running on port 3000"))
