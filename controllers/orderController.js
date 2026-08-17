@@ -1,7 +1,6 @@
 import Order from "../models/order.js";
 import Product from "../models/product.js";
-import User from "../models/user.js";
-import { validate } from "validator";
+
 
 
 export async function createOrder(req, res) {
@@ -53,7 +52,7 @@ export async function createOrder(req, res) {
         for (let i = 0; i < req.body.items.length; i++) {
             const item = req.body.items[i];
             //productID,qauntity
-        
+
             const product = await Product.findOne({ productId: item.product?.productId || item.productId });
 
             if (product == null) {
@@ -118,37 +117,37 @@ export async function getOrders(req, res) {
         if (req.user == null) {
             return res.status(401).json({ message: "You nedd to login to view your orders" });
         }
-        const pageSizeString = req.params.pageSize||"10"
-        const pageNumberInString = req.params.pageNumber||"1"
+        const pageSizeString = req.params.pageSize || "10"
+        const pageNumberInString = req.params.pageNumber || "1"
 
-        
+
 
         let orders;
         if (req.user.isAdmin) {
 
             const totalOrderVount = await Order.countDocuments();
-            const totalpages = Math.ceil(totalOrderCount /pageSize);
+            const totalpages = Math.ceil(totalOrderCount / pageSize);
             const pagesNeededToBeSkipped = pageNumber - 1
             const itemsNeededToBeSkipped = pagesNeededToBeSkipped * pageSize
-            
-            
+
+
             orders = await Order.find().sort({ date: -1 }).skip(itemsNeededToBeSkipped).limit(pageSize)
-            return res.json({orders: orders, totalPages: totalpages,currentPage:pageNumber,totalOrderCount:totalOrderCount,pageSize:pageSize})
-                
+            return res.json({ orders: orders, totalPages: totalpages, currentPage: pageNumber, totalOrderCount: totalOrderCount, pageSize: pageSize })
+
         } else {
 
             const totalOrderVount = await Order.countDocuments({ email: req.user.email });
-            const totalpages = Math.ceil(totalOrderCount /pageSize);
+            const totalpages = Math.ceil(totalOrderCount / pageSize);
             const pagesNeededToBeSkipped = pageNumber - 1
             const itemsNeededToBeSkipped = pagesNeededToBeSkipped * pageSize
-            
 
-           const orders = await Order.find({ email: req.user.email }).sort({ date: -1 }).skip(itemsNeededToBeSkipped).limit(pageSize)
-           
-            return res.json({orders: orders, totalPages: totalpages,currentPage:pageNumber,totalOrderCount:totalOrderCount,pageSize:pageSize})
+
+            const orders = await Order.find({ email: req.user.email }).sort({ date: -1 }).skip(itemsNeededToBeSkipped).limit(pageSize)
+
+            return res.json({ orders: orders, totalPages: totalpages, currentPage: pageNumber, totalOrderCount: totalOrderCount, pageSize: pageSize })
         }
 
-        
+
     } catch (error) {
         console.error("Error fetching orders:", error);
         res.status(500).json({ message: "Internal server error" });
