@@ -115,39 +115,47 @@ export async function createOrder(req, res) {
 export async function getOrders(req, res) {
     try {
         if (req.user == null) {
-            return res.status(401).json({ message: "You nedd to login to view your orders" });
+            return res.status(401).json({ message: "You need to login to view your orders" });
         }
-        const pageSizeString = req.params.pageSize || "10"
-        const pageNumberInString = req.params.pageNumber || "1"
+        const pageSizeString = req.params.pageSize || "10";
+        const pageNumberInString = req.params.pageNumber || "1";
 
-
+        const pageSize = parseInt(pageSizeString, 10) || 10;
+        const pageNumber = parseInt(pageNumberInString, 10) || 1;
 
         let orders;
         if (req.user.isAdmin) {
-
-            const totalOrderVount = await Order.countDocuments();
+            const totalOrderCount = await Order.countDocuments();
             const totalpages = Math.ceil(totalOrderCount / pageSize);
-            const pagesNeededToBeSkipped = pageNumber - 1
-            const itemsNeededToBeSkipped = pagesNeededToBeSkipped * pageSize
+            const pagesNeededToBeSkipped = pageNumber - 1;
+            const itemsNeededToBeSkipped = pagesNeededToBeSkipped * pageSize;
 
-
-            orders = await Order.find().sort({ date: -1 }).skip(itemsNeededToBeSkipped).limit(pageSize)
-            return res.json({ orders: orders, totalPages: totalpages, currentPage: pageNumber, totalOrderCount: totalOrderCount, pageSize: pageSize })
-
+            orders = await Order.find().sort({ date: -1 }).skip(itemsNeededToBeSkipped).limit(pageSize);
+            return res.json({
+                orders: orders,
+                totalPages: totalpages,
+                currentPage: pageNumber,
+                totalCount: totalOrderCount,
+                totalOrderCount: totalOrderCount,
+                pageSize: pageSize
+            });
         } else {
-
-            const totalOrderVount = await Order.countDocuments({ email: req.user.email });
+            const totalOrderCount = await Order.countDocuments({ email: req.user.email });
             const totalpages = Math.ceil(totalOrderCount / pageSize);
-            const pagesNeededToBeSkipped = pageNumber - 1
-            const itemsNeededToBeSkipped = pagesNeededToBeSkipped * pageSize
+            const pagesNeededToBeSkipped = pageNumber - 1;
+            const itemsNeededToBeSkipped = pagesNeededToBeSkipped * pageSize;
 
+            const orders = await Order.find({ email: req.user.email }).sort({ date: -1 }).skip(itemsNeededToBeSkipped).limit(pageSize);
 
-            const orders = await Order.find({ email: req.user.email }).sort({ date: -1 }).skip(itemsNeededToBeSkipped).limit(pageSize)
-
-            return res.json({ orders: orders, totalPages: totalpages, currentPage: pageNumber, totalOrderCount: totalOrderCount, pageSize: pageSize })
+            return res.json({
+                orders: orders,
+                totalPages: totalpages,
+                currentPage: pageNumber,
+                totalCount: totalOrderCount,
+                totalOrderCount: totalOrderCount,
+                pageSize: pageSize
+            });
         }
-
-
     } catch (error) {
         console.error("Error fetching orders:", error);
         res.status(500).json({ message: "Internal server error" });
@@ -160,8 +168,8 @@ export async function updateOrderStatus(req, res) {
             return res.status(403).json({ message: "Forbidden" });
         }
 
-        const { orderId } = req.params;
-        const { status } = req.body;
+        const { orderId, status: paramStatus } = req.params;
+        const status = req.body.status || paramStatus;
 
         const updatedOrder = await Order.findOneAndUpdate(
             { orderId: orderId },

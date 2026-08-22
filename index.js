@@ -7,6 +7,7 @@ import orderRouter from './routes/orderRouter.js'
 
 import productRouter from './routes/productRouter.js' 
 import dotenv from 'dotenv'
+import jwt from 'jsonwebtoken'
 
 dotenv.config()
 
