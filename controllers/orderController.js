@@ -1,189 +1,201 @@
 import Order from "../models/order.js";
 import Product from "../models/product.js";
-
-
+import { isAdmin } from "./userController.js";
 
 export async function createOrder(req, res) {
+
     try {
+
         if (req.user == null) {
-            return res.status(401).json({ message: "You need to login to create an order" });
+            res.status(401).json({ message: "You need to login to create an order" });
+            return
         }
 
+        //
         const orderData = {
             orderId: "ORD000001",
             email: req.user.email,
-            firstName: req.body.firstName || req.user.firstName || "",
-            lastName: req.body.lastName || req.user.lastName || "",
-            addressLine1: req.body.addressLine1 || "",
-            addressLine2: req.body.addressLine2 || "",
-            city: req.body.city || "",
-            postalCode: req.body.postalCode || "",
-            district: req.body.district || "colombo",
-            diliveryFee: req.body.diliveryFee || 0,
-            phone: req.body.phone || req.body.phoneNumber || "",
-            secondaryPhone: req.body.secondaryPhone || req.body.secondaryPhoneNumber || "",
-            customerNotes: req.body.customerNotes || req.body.specialNotes || "",
+            firstName: req.body.firstName,
+            lastName: req.body.lastName,
+            addressLine1: req.body.addressLine1,
+            addressLine2: req.body.addressLine2,
+            city: req.body.city,
+            postalCode: req.body.postalCode,
+            phone: req.body.phone,
+            secondaryPhone: req.body.secondaryPhone,
+            customerNotes: req.body.customerNotes,
             totalAmount: 0,
             items: []
-        };
-
-        // Basic fields validations
-        if (!orderData.firstName.trim()) {
-            return res.status(400).json({ message: "First name is required" });
-        }
-        if (!orderData.addressLine1.trim()) {
-            return res.status(400).json({ message: "Address Line 1 is required" });
-        }
-        if (!orderData.city.trim()) {
-            return res.status(400).json({ message: "City is required" });
-        }
-        if (!orderData.district.trim()) {
-            return res.status(400).json({ message: "District is required" });
-        }
-        if (!orderData.phone.trim()) {
-            return res.status(400).json({ message: "Phone number is required" });
         }
 
-        if (!req.body.items || !Array.isArray(req.body.items) || req.body.items.length === 0) {
-            return res.status(400).json({ message: "Order must contain at least one item" });
+
+
+        //validate firstName and lastName
+        if (orderData.firstName == null || orderData.firstName == "") {
+            orderData.firstName = req.user.firstName
         }
 
-        // Validate items one by one
+        if (orderData.lastName == null || orderData.lastName == "") {
+            orderData.lastName = req.user.lastName
+        }
+
+        //validate items one by one
+
         for (let i = 0; i < req.body.items.length; i++) {
-            const item = req.body.items[i];
-            //productID,qauntity
 
-            const product = await Product.findOne({ productId: item.product?.productId || item.productId });
+            console.log(req.body.items[i])
+            //productId , quantity
+
+            const product = await Product.findOne({ productId: req.body.items[i].productId })
 
             if (product == null) {
-                return res.status(400).json({
-                    message: "Product with productId " + (item.product?.productId || item.productId) + " does not exist"
-                });
+                res.status(400).json({ message: "Product with productId " + req.body.items[i].productId + " does not exist" });
+                return
             }
 
             if (!product.isAvailable) {
-                return res.status(400).json({
-                    message: "Product with productId " + product.productId + " is not available"
-                });
+                res.status(400).json({ message: "Product with productId " + req.body.items[i].productId + " is not available" });
+                return
             }
 
-            const itemQty = item.qty || 1;
+            // if(product.stock < req.body.items[i].qty){
+            //     res.status(400).json({ message: "Product with productId " + req.body.items[i].productId + " has insufficient stock" });
+            //     return
+            // }
+
             orderData.items.push({
                 product: {
                     productId: product.productId,
                     name: product.name,
-                    image: (product.images && product.images[0]) || product.image || "",
+                    image: product.images[0] || "",
                     price: product.price
                 },
-                qty: itemQty
-            });
+                qty: req.body.items[i].qty,
+            })
 
-            orderData.totalAmount += product.price * itemQty;
+            orderData.totalAmount += product.price * req.body.items[i].qty
+
         }
 
-        // Add delivery fee to total amount
-        orderData.totalAmount += orderData.diliveryFee;
+        //generate orderId
 
-        // Generate next orderId
-        const lastOrder = await Order.findOne().sort({ date: -1 });
-        if (lastOrder != null && lastOrder.orderId) {
-            const lastOrderId = lastOrder.orderId; // "ORD000026"
-            const lastOrderNumberInString = lastOrderId.replace("ORD", ""); // "000026"
-            const lastOrderNumber = parseInt(lastOrderNumberInString, 10); // 26
+        const lastOrder = await Order.findOne().sort({ date: -1 })
 
-            if (!isNaN(lastOrderNumber)) {
-                const newOrderNumber = lastOrderNumber + 1; // 27
-                const newOrderNumberInString = newOrderNumber.toString().padStart(6, "0"); // "000027"
-                orderData.orderId = "ORD" + newOrderNumberInString; // "ORD000027"
-            }
+        if (lastOrder != null) {
+
+            const lastOrderId = lastOrder.orderId //"ORD000026"
+            const lastOrderNumberInString = lastOrderId.replace("ORD", "") //"000026"
+            const lastOrderNumber = parseInt(lastOrderNumberInString) //26
+
+            const newOrderNumber = lastOrderNumber + 1 //27
+            const newOrderNumberInString = newOrderNumber.toString().padStart(6, "0") //"000027"
+            orderData.orderId = "ORD" + newOrderNumberInString //"ORD000027"
+
         }
 
-        const newOrder = new Order(orderData);
-        await newOrder.save();
+        //order creation
 
-        res.status(201).json({
-            message: "Order placed successfully!",
-            order: newOrder
-        });
+        const order = new Order(orderData)
+        await order.save()
+
+
+        //update stock of products
+
+        // for(let i=0 ; i<req.body.items.length ; i++){
+
+        //     const product = await Product.updateOne({ productId : req.body.items[i].productId }, { $inc: { stock: -req.body.items[i].qty } })
+
+        // }
+
+        res.json({ message: "Order created successfully", orderId: orderData.orderId });
+
 
     } catch (error) {
         console.error("Error creating order:", error);
-        res.status(500).json({ message: "Failed to create order" });
+        return res.status(500).json({ message: "Internal server error" });
     }
+
 }
 
 export async function getOrders(req, res) {
+
     try {
+
         if (req.user == null) {
-            return res.status(401).json({ message: "You need to login to view your orders" });
+            res.status(401).json({ message: "You need to login to view your orders" });
+            return
         }
-        const pageSizeString = req.params.pageSize || "10";
-        const pageNumberInString = req.params.pageNumber || "1";
 
-        const pageSize = parseInt(pageSizeString, 10) || 10;
-        const pageNumber = parseInt(pageNumberInString, 10) || 1;
+        const pageSizeInString = req.params.pageSize || "10" //"3"
+        const pageNumberInString = req.params.pageNumber || "1" //"2"
 
-        let orders;
+        const pageSize = parseInt(pageSizeInString) //10
+        const pageNumber = parseInt(pageNumberInString) //1
+
         if (req.user.isAdmin) {
+
             const totalOrderCount = await Order.countDocuments();
-            const totalpages = Math.ceil(totalOrderCount / pageSize);
-            const pagesNeededToBeSkipped = pageNumber - 1;
-            const itemsNeededToBeSkipped = pagesNeededToBeSkipped * pageSize;
 
-            orders = await Order.find().sort({ date: -1 }).skip(itemsNeededToBeSkipped).limit(pageSize);
-            return res.json({
-                orders: orders,
-                totalPages: totalpages,
-                currentPage: pageNumber,
-                totalCount: totalOrderCount,
-                totalOrderCount: totalOrderCount,
-                pageSize: pageSize
-            });
+            const totalPages = Math.ceil(totalOrderCount / pageSize)
+
+            const pagesNeededToBeSkipped = pageNumber - 1
+
+            const itemsNeededtoBeSkipped = pagesNeededToBeSkipped * pageSize
+
+            const orders = await Order.find().sort({ date: -1 }).skip(itemsNeededtoBeSkipped).limit(pageSize)
+
+            return res.json({ orders: orders, totalPages: totalPages, currentPage: pageNumber, totalCount: totalOrderCount });
+
         } else {
+
             const totalOrderCount = await Order.countDocuments({ email: req.user.email });
-            const totalpages = Math.ceil(totalOrderCount / pageSize);
-            const pagesNeededToBeSkipped = pageNumber - 1;
-            const itemsNeededToBeSkipped = pagesNeededToBeSkipped * pageSize;
 
-            const orders = await Order.find({ email: req.user.email }).sort({ date: -1 }).skip(itemsNeededToBeSkipped).limit(pageSize);
+            const totalPages = Math.ceil(totalOrderCount / pageSize)
 
-            return res.json({
-                orders: orders,
-                totalPages: totalpages,
-                currentPage: pageNumber,
-                totalCount: totalOrderCount,
-                totalOrderCount: totalOrderCount,
-                pageSize: pageSize
-            });
+            const pagesNeededToBeSkipped = pageNumber - 1
+
+            const itemsNeededtoBeSkipped = pagesNeededToBeSkipped * pageSize
+
+            const orders = await Order.find({ email: req.user.email }).sort({ date: -1 }).skip(itemsNeededtoBeSkipped).limit(pageSize)
+
+            return res.json({ orders: orders, totalPages: totalPages, currentPage: pageNumber, totalCount: totalOrderCount });
+
         }
+
+
     } catch (error) {
-        console.error("Error fetching orders:", error);
-        res.status(500).json({ message: "Internal server error" });
+        console.error("Error getting orders:", error);
+        return res.status(500).json({ message: "Internal server error" });
     }
+
 }
 
 export async function updateOrderStatus(req, res) {
+
+    if (!isAdmin(req)) {
+        res.status(403).json({ message: "You are not authorized to update order status" });
+        return
+    }
+
+    const orderId = req.params.orderId
+    const newStatus = req.params.status
+
     try {
-        if (req.user == null || !req.user.isAdmin) {
-            return res.status(403).json({ message: "Forbidden" });
+
+        const order = await Order.findOne({ orderId: orderId })
+
+        if (order == null) {
+            res.status(404).json({ message: "Order with orderId " + orderId + " does not exist" });
+            return
         }
 
-        const { orderId, status: paramStatus } = req.params;
-        const status = req.body.status || paramStatus;
+        await Order.updateOne({ orderId: orderId }, { status: newStatus })
 
-        const updatedOrder = await Order.findOneAndUpdate(
-            { orderId: orderId },
-            { status: status },
-            { new: true }
-        );
+        res.json({ message: "Order status updated successfully" });
 
-        if (!updatedOrder) {
-            return res.status(404).json({ message: "Order not found" });
-        }
-
-        res.json({ message: "Order status updated successfully", order: updatedOrder });
     } catch (error) {
         console.error("Error updating order status:", error);
-        res.status(500).json({ message: "Internal server error" });
+        return res.status(500).json({ message: "Internal server error" });
     }
+
 }
