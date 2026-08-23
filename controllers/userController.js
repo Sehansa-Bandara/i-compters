@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import dotenv from 'dotenv'
 
 
+
 dotenv.config()
 
 export async function createUser(req, res) {
@@ -97,7 +98,81 @@ export async function getAllUsers(req, res) {
         console.error("Error fetching all users:", error);
         return res.status(500).json({ message: "Internal server error" });
     }
+
 }
+export async function updateUserStatus(req, res) {
+
+    if (!isAdmin(req)) {
+        res.status(403).json({ message: "You are not authorized to update user status" });
+        return
+    }
+
+    const email = req.body.email;
+    const isBlocked = req.body.isBlocked;
+
+    try {
+
+        if (email == req.user.email) {
+            res.status(400).json({ message: "You cannot update your own status" });
+            return
+        }
+
+
+        const user = await User.findOne({ email: email })
+
+        if (user == null) {
+            res.status(404).json({ message: "User does not exist" });
+            return
+        }
+
+        await User.findOneAndUpdate({ email: email }, { isBlocked: isBlocked })
+
+        res.json({ message: "User status updated successfully" });
+
+    } catch (error) {
+        console.error("Error updating user status:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+
+}
+
+export async function updateUserRole(req, res) {
+
+    if (!isAdmin(req)) {
+        res.status(403).json({ message: "You are not authorized to update user role" });
+        return
+    }
+
+    const email = req.body.email;
+    const isAdminRole = req.body.isAdmin;
+
+    try {
+
+        if (email == req.user.email) {
+            res.status(400).json({ message: "You cannot update your own role" });
+            return
+        }
+
+
+        const user = await User.findOne({ email: email })
+
+        if (user == null) {
+            res.status(404).json({ message: "User does not exist" });
+            return
+        }
+
+        await User.findOneAndUpdate({ email: email }, { isAdmin: isAdminRole })
+
+        res.json({ message: "User role updated successfully" });
+
+    } catch (error) {
+        console.error("Error updating user role:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+
+}
+
+
 export function isAdmin(req) {
     if (req.user == null) {
         return false;
@@ -106,4 +181,28 @@ export function isAdmin(req) {
         return false;
     }
     return true;
+}
+export async function getCurrentUser(req,res){
+
+    if(req.user == null){
+        res.status(401).json({ message: "You are not logged in" });
+        return
+    }
+
+    try{
+
+        const user = await User.findOne({email : req.user.email})
+
+        if(user == null){
+            res.status(404).json({ message: "User does not exist" });
+            return
+        }
+
+        res.json({ user : user });
+
+    }catch(error){
+        console.error("Error getting current user:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+
 }

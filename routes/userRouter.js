@@ -1,13 +1,17 @@
 import express from 'express';
-import { createUser } from '../controllers/userController.js';
-import { loginUser } from '../controllers/userController.js';
+import { createUser, loginUser, getAllUsers, updateUserStatus, updateUserRole, getCurrentUser } from '../controllers/userController.js';
+import authenticates from "../middlewares/authenticates.js";
 
 
 const userRouter = express.Router();
 
+userRouter.get("/me", authenticates, getCurrentUser);
+
 userRouter.post("/", createUser);
 userRouter.post("/login", loginUser);
-userRouter.get("/:pageSize/:pageNumber", getAllUsers)
+userRouter.get("/:pageSize/:pageNumber", authenticates, getAllUsers);
+userRouter.put("/status", authenticates, updateUserStatus);
+userRouter.put("/role", authenticates, updateUserRole);
 
 
 export default userRouter;
