@@ -131,5 +131,36 @@ export async function getProductById(req, res) {
     } catch (error) {
         console.error("Error fetching product:", error);
         return res.status(500).json({ message: "Internal server error" });
+
     }
+
+}
+
+export async function searchProducts(req, res) {
+
+    try {
+
+        const query = req.params.query
+
+        // const category = req.query.category
+
+        //if category == all
+
+        const products = await Product.find(
+            {
+                $or: [
+                    { name: { $regex: query, $options: "i" } },
+                    { description: { $regex: query, $options: "i" } },
+                    { altNames: { $elemMatch: { $regex: query, $options: "i" } } }
+                ],
+                // category : category === "all" ? { $exists : true } : category               
+            }
+        )
+        res.json(products);
+
+    } catch (error) {
+        console.error("Error searching products:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+
 }

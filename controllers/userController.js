@@ -171,7 +171,65 @@ export async function updateUserRole(req, res) {
     }
 
 }
+export async function updateUserProfile(req, res) {
 
+    if (req.user == null) {
+        res.status(401).json({ message: "You are not logged in" });
+        return
+    }
+
+    try {
+
+        const user = await User.findOne({ email: req.user.email })
+
+        if (user == null) {
+            res.status(404).json({ message: "User does not exist" });
+            return
+        }
+
+        await User.findOneAndUpdate({ email: req.user.email }, {
+            firstName: req.body.firstName,
+            lastName: req.body.lastName,
+            image: req.body.image
+        })
+
+        res.json({ message: "User profile updated successfully" });
+
+    } catch (error) {
+        console.error("Error updating user profile:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+export async function updateUserPassword(req, res) {
+
+    if (req.user == null) {
+        res.status(401).json({ message: "You are not logged in" });
+        return
+    }
+
+    try {
+
+        const user = await User.findOne({ email: req.user.email })
+
+        if (user == null) {
+            res.status(404).json({ message: "User does not exist" });
+            return
+        }
+
+        const hashedPassword = bcrypt.hashSync(req.body.password, 10);
+
+        await User.findOneAndUpdate({ email: req.user.email }, {
+            password: hashedPassword
+        })
+
+        res.json({ message: "User profile updated successfully" });
+
+    } catch (error) {
+        console.error("Error updating user profile:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+
+}
 
 export function isAdmin(req) {
     if (req.user == null) {
@@ -182,25 +240,25 @@ export function isAdmin(req) {
     }
     return true;
 }
-export async function getCurrentUser(req,res){
+export async function getCurrentUser(req, res) {
 
-    if(req.user == null){
+    if (req.user == null) {
         res.status(401).json({ message: "You are not logged in" });
         return
     }
 
-    try{
+    try {
 
-        const user = await User.findOne({email : req.user.email})
+        const user = await User.findOne({ email: req.user.email })
 
-        if(user == null){
+        if (user == null) {
             res.status(404).json({ message: "User does not exist" });
             return
         }
 
-        res.json({ user : user });
+        res.json({ user: user });
 
-    }catch(error){
+    } catch (error) {
         console.error("Error getting current user:", error);
         return res.status(500).json({ message: "Internal server error" });
     }
