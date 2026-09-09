@@ -2,6 +2,8 @@ import User from "../models/user.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import dotenv from 'dotenv'
+import transporter from "../utils/emailTransporter.js";
+import OTP from "../models/otp.js";
 
 
 
@@ -260,6 +262,111 @@ export async function getCurrentUser(req, res) {
 
     } catch (error) {
         console.error("Error getting current user:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+
+}
+export async function sendOTP(req,res){
+ try{
+
+        const email = req.body.email;
+
+        const user = await User.findOne({email : email})
+
+        if(user == null){
+            res.status(404).json({ message: "Account not found" });
+            return
+        }
+
+        if(user.isBlocked){
+            res.status(403).json({ message: "User is blocked" });
+            return
+        }
+
+        await OTP.findOneAndDelete({email : email})
+
+        //100000 - 999999
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+        const otpHash = bcrypt.hashSync(otp, 10);
+
+        const newOTP = new OTP({
+            email : email,
+            otp : otpHash
+        })
+
+        await newOTP.save();
+
+        const message = {
+            from: process.env.EMAIL,
+            to: email,
+            subject: "Your OTP for iComputers",
+            text: `Your OTP for iComputers is: ${otp}. It is valid for 5 minutes.`
+        }
+
+        transporter.sendMail(message, (error, info) => {
+            if (error) {
+                console.error("Error sending OTP email:", error);
+                return res.status(500).json({ message: "Failed to send OTP email" });
+            } else {
+                console.log("OTP email sent:", info.response);
+                return res.json({ message: "OTP sent successfully" });
+            }
+        })
+
+    }catch(error){
+        console.error("Error sending OTP:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+
+}
+
+export async function resetPassword(req,res){
+
+    const email = req.body.email;
+    const otp = req.body.otp;
+    const newPassword = req.body.newPassword;
+    
+    try{
+
+        const otpRecord = await OTP.findOne({email : email})
+
+        if(otpRecord == null){
+            res.status(404).json({ message: "OTP not found" });
+            return
+        }
+
+        const isOTPValid = bcrypt.compareSync(otp, otpRecord.otp);
+
+        const currentTime = new Date();
+
+        const otpCreationTime = new Date(otpRecord.time);
+
+        const timeDifferenceInMinutes = (currentTime - otpCreationTime) / (1000 * 60);
+
+        if(!isOTPValid){
+            res.status(400).json({ message: "Invalid OTP" });
+            return
+        }
+
+        if(timeDifferenceInMinutes > 5){
+            res.status(400).json({ message: "OTP has expired" });
+            return
+        }
+
+        const hashedPassword = bcrypt.hashSync(newPassword, 10);
+
+        await User.findOneAndUpdate({email : email} , {
+            password : hashedPassword
+        })
+
+        await OTP.findOneAndDelete({email : email})
+
+        res.json({ message: "Password reset successfully" });
+
+    }catch(error){
+        console.error("Error resetting password:", error);
         return res.status(500).json({ message: "Internal server error" });
     }
 
