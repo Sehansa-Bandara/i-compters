@@ -7,6 +7,7 @@ import OTP from "../models/otp.js";
 
 
 
+
 dotenv.config()
 
 export async function createUser(req, res) {
@@ -266,24 +267,24 @@ export async function getCurrentUser(req, res) {
     }
 
 }
-export async function sendOTP(req,res){
- try{
+export async function sendOTP(req, res) {
+    try {
 
         const email = req.body.email;
 
-        const user = await User.findOne({email : email})
+        const user = await User.findOne({ email: email })
 
-        if(user == null){
+        if (user == null) {
             res.status(404).json({ message: "Account not found" });
             return
         }
 
-        if(user.isBlocked){
+        if (user.isBlocked) {
             res.status(403).json({ message: "User is blocked" });
             return
         }
 
-        await OTP.findOneAndDelete({email : email})
+        await OTP.findOneAndDelete({ email: email })
 
         //100000 - 999999
 
@@ -292,8 +293,8 @@ export async function sendOTP(req,res){
         const otpHash = bcrypt.hashSync(otp, 10);
 
         const newOTP = new OTP({
-            email : email,
-            otp : otpHash
+            email: email,
+            otp: otpHash
         })
 
         await newOTP.save();
@@ -315,24 +316,24 @@ export async function sendOTP(req,res){
             }
         })
 
-    }catch(error){
+    } catch (error) {
         console.error("Error sending OTP:", error);
         return res.status(500).json({ message: "Internal server error" });
     }
 
 }
 
-export async function resetPassword(req,res){
+export async function resetPassword(req, res) {
 
     const email = req.body.email;
     const otp = req.body.otp;
     const newPassword = req.body.newPassword;
-    
-    try{
 
-        const otpRecord = await OTP.findOne({email : email})
+    try {
 
-        if(otpRecord == null){
+        const otpRecord = await OTP.findOne({ email: email })
+
+        if (otpRecord == null) {
             res.status(404).json({ message: "OTP not found" });
             return
         }
@@ -345,27 +346,27 @@ export async function resetPassword(req,res){
 
         const timeDifferenceInMinutes = (currentTime - otpCreationTime) / (1000 * 60);
 
-        if(!isOTPValid){
+        if (!isOTPValid) {
             res.status(400).json({ message: "Invalid OTP" });
             return
         }
 
-        if(timeDifferenceInMinutes > 5){
+        if (timeDifferenceInMinutes > 5) {
             res.status(400).json({ message: "OTP has expired" });
             return
         }
 
         const hashedPassword = bcrypt.hashSync(newPassword, 10);
 
-        await User.findOneAndUpdate({email : email} , {
-            password : hashedPassword
+        await User.findOneAndUpdate({ email: email }, {
+            password: hashedPassword
         })
 
-        await OTP.findOneAndDelete({email : email})
+        await OTP.findOneAndDelete({ email: email })
 
         res.json({ message: "Password reset successfully" });
 
-    }catch(error){
+    } catch (error) {
         console.error("Error resetting password:", error);
         return res.status(500).json({ message: "Internal server error" });
     }

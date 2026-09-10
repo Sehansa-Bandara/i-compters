@@ -5,13 +5,14 @@ import cors from 'cors'
 import orderRouter from './routes/orderRouter.js'
 
 
-import productRouter from './routes/productRouter.js' 
+
+import productRouter from './routes/productRouter.js'
 import dotenv from 'dotenv'
 import jwt from 'jsonwebtoken'
 
 dotenv.config()
 
-const mongoUri= process.env.MONGO_URI
+const mongoUri = process.env.MONGO_URI
 
 mongoose.connect(mongoUri).then(
     () => {
@@ -24,11 +25,11 @@ app.use(cors())
 
 app.use(express.json())
 
- 
+
 
 const authenticateUser = function (req, res, next) {
     const header = req.header("Authorization")
-    
+
     if (header != null) {
         const token = header.replace("Bearer ", "")
 
@@ -46,11 +47,13 @@ const authenticateUser = function (req, res, next) {
 }
 
 
-app.use("/users", userRouter) 
+app.use("/api/users", authenticateUser, userRouter)
+app.use("/api/products", authenticateUser, productRouter)
+app.use("/api/orders", authenticateUser, orderRouter)
 
-
-app.use("/products", productRouter) 
-app.use("/orders" , orderRouter)
+app.get("/", (req, res) => {
+    res.send("Server is running")
+})
 
 app.listen(3000,
-     () => console.log("Server is running on port 3000"))
+    () => console.log("Server is running on port 3000"))

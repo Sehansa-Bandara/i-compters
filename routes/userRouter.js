@@ -16,7 +16,7 @@ userRouter.put("/role", authenticates, updateUserRole);
 userRouter.put("/update", updateUserProfile);
 userRouter.put("password", updateUserPassword);
 userRouter.post("/otp",sendOTP);
-userRouter.post("/resetPassword",resetPassword);
+userRouter.post("/reset-password",resetPassword);
 
 
 
