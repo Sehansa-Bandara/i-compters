@@ -47,9 +47,10 @@ const authenticateUser = function (req, res, next) {
 }
 
 
-app.use("/api/users", authenticateUser, userRouter)
-app.use("/api/products", authenticateUser, productRouter)
-app.use("/api/orders", authenticateUser, orderRouter)
+app.use("/api/users", userRouter)
+app.use("/api/user", userRouter)
+app.use("/api/products", productRouter)
+app.use("/api/orders", orderRouter)
 
 app.get("/", (req, res) => {
     res.send("Server is running")

@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import dotenv from 'dotenv'
 import transporter from "../utils/emailTransporter.js";
 import OTP from "../models/otp.js";
+import axios from "axios";
 
 
 
@@ -46,6 +47,12 @@ export async function loginUser(req, res) {
             res.status(404).json({ message: "User not found" });
             return;
         }
+
+        if (user.isBlocked) {
+            res.status(403).json({ message: "User is blocked" });
+            return;
+        }
+
         const isPasswordMatching = bcrypt.compareSync(password, user.password);
         if (isPasswordMatching) {
 
@@ -58,12 +65,12 @@ export async function loginUser(req, res) {
                 isEmailVerified: user.isEmailVerified,
                 isAdmin: user.isAdmin,
                 isBlocked: user.isBlocked
+            };
 
-            }
+            const jwtSecret = process.env.JWT_SECRET || "com345#89@";
+            const token = jwt.sign(userInfo, jwtSecret);
 
-            const token = jwt.sign(userInfo, "com345#89@");
-
-            res.json({ token: token, isAdmin: user.isAdmin });
+            res.json({ token: token, isAdmin: user.isAdmin, user: userInfo });
         } else {
             res.status(401).json({ message: "Invalid password" });
         }
@@ -371,4 +378,73 @@ export async function resetPassword(req, res) {
         return res.status(500).json({ message: "Internal server error" });
     }
 
+}
+export async function googleLogin(req, res) {
+    const accessToken = req.body.accessToken;
+    if (!accessToken) {
+        return res.status(400).json({ message: "Access token is required" });
+    }
+
+    try {
+        const googleResponse = await axios.get("https://www.googleapis.com/oauth2/v1/userinfo", {
+            headers: {
+                "Authorization": `Bearer ${accessToken}`
+            }
+        });
+
+        if (!googleResponse.data || !googleResponse.data.email) {
+            return res.status(400).json({ message: "Failed to retrieve user info from Google" });
+        }
+
+        let user = await User.findOne({ email: googleResponse.data.email });
+
+        if (user == null) {
+            const firstName = googleResponse.data.given_name || googleResponse.data.name?.split(" ")[0] || "User";
+            const lastName = googleResponse.data.family_name || (googleResponse.data.name ? googleResponse.data.name.replace(firstName, "").trim() : "") || "User";
+            const image = googleResponse.data.picture || "/images/default-profile.png";
+            const isEmailVerified = Boolean(googleResponse.data.email_verified ?? googleResponse.data.verified_email ?? true);
+
+            const randomPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
+            const hashedPassword = bcrypt.hashSync(randomPassword, 10);
+
+            const newUser = new User({
+                email: googleResponse.data.email,
+                firstName: firstName,
+                lastName: lastName,
+                image: image,
+                password: hashedPassword,
+                isEmailVerified: isEmailVerified
+            });
+
+            user = await newUser.save();
+        } else {
+            if (googleResponse.data.picture && user.image !== googleResponse.data.picture) {
+                user.image = googleResponse.data.picture;
+                await User.findOneAndUpdate({ email: user.email }, { image: googleResponse.data.picture });
+            }
+        }
+
+        if (user.isBlocked) {
+            return res.status(403).json({ message: "User is blocked" });
+        }
+
+        const userInfo = {
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            image: user.image,
+            isEmailVerified: user.isEmailVerified,
+            isAdmin: user.isAdmin,
+            isBlocked: user.isBlocked
+        };
+
+        const jwtSecret = process.env.JWT_SECRET || "com345#89@";
+        const token = jwt.sign(userInfo, jwtSecret);
+
+        return res.json({ token: token, isAdmin: user.isAdmin, user: userInfo });
+
+    } catch (error) {
+        console.error("Error logging in with google:", error);
+        return res.status(500).json({ message: "Failed to login with google", error: error.message });
+    }
 }
