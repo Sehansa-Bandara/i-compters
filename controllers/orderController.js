@@ -11,24 +11,30 @@ export async function createOrder(req, res) {
             return
         }
 
-        //
+        if (!req.body.items || !Array.isArray(req.body.items) || req.body.items.length === 0) {
+            res.status(400).json({ message: "No items in order" });
+            return;
+        }
+
+        const diliveryFee = Number(req.body.diliveryFee) || 0;
+
         const orderData = {
             orderId: "ORD000001",
             email: req.user.email,
             firstName: req.body.firstName,
             lastName: req.body.lastName,
             addressLine1: req.body.addressLine1,
-            addressLine2: req.body.addressLine2,
+            addressLine2: req.body.addressLine2 || "",
             city: req.body.city,
-            postalCode: req.body.postalCode,
+            postalCode: req.body.postalCode || "00000",
+            district: req.body.district || "colombo",
+            diliveryFee: diliveryFee,
             phone: req.body.phone,
-            secondaryPhone: req.body.secondaryPhone,
-            customerNotes: req.body.customerNotes,
+            secondaryPhone: req.body.secondaryPhone || "",
+            customerNotes: req.body.customerNotes || "",
             totalAmount: 0,
             items: []
         }
-
-
 
         //validate firstName and lastName
         if (orderData.firstName == null || orderData.firstName == "") {
@@ -40,9 +46,7 @@ export async function createOrder(req, res) {
         }
 
         //validate items one by one
-
         for (let i = 0; i < req.body.items.length; i++) {
-
             console.log(req.body.items[i])
             //productId , quantity
 
@@ -58,24 +62,20 @@ export async function createOrder(req, res) {
                 return
             }
 
-            // if(product.stock < req.body.items[i].qty){
-            //     res.status(400).json({ message: "Product with productId " + req.body.items[i].productId + " has insufficient stock" });
-            //     return
-            // }
-
             orderData.items.push({
                 product: {
                     productId: product.productId,
                     name: product.name,
-                    image: product.images[0] || "",
+                    image: (product.images && product.images[0]) ? product.images[0] : "",
                     price: product.price
                 },
                 qty: req.body.items[i].qty,
             })
 
             orderData.totalAmount += product.price * req.body.items[i].qty
-
         }
+
+        orderData.totalAmount += diliveryFee;
 
         //generate orderId
 
@@ -112,7 +112,7 @@ export async function createOrder(req, res) {
 
     } catch (error) {
         console.error("Error creating order:", error);
-        return res.status(500).json({ message: "Internal server error" });
+        return res.status(500).json({ message: error.message || "Internal server error" });
     }
 
 }

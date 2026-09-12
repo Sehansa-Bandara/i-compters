@@ -3,10 +3,8 @@ import mongoose from 'mongoose'
 import userRouter from './routes/userRouter.js'
 import cors from 'cors'
 import orderRouter from './routes/orderRouter.js'
-
-
-
 import productRouter from './routes/productRouter.js'
+import reviewRouter from './routes/reviewRoutes.js'
 import dotenv from 'dotenv'
 import jwt from 'jsonwebtoken'
 
@@ -51,6 +49,7 @@ app.use("/api/users", userRouter)
 app.use("/api/user", userRouter)
 app.use("/api/products", productRouter)
 app.use("/api/orders", orderRouter)
+app.use("/api/reviews", reviewRouter)
 
 app.get("/", (req, res) => {
     res.send("Server is running")
