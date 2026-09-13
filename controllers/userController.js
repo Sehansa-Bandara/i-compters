@@ -34,7 +34,7 @@ export async function createUser(req, res) {
             firstName: firstName || "User",
             lastName: lastName || "",
             password: passwordhash,
-            image: "/userGirl.jpg"
+            image: "/user.jpg"
         });
 
         await user.save();
