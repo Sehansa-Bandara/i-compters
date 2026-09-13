@@ -23,8 +23,21 @@ const app = express()
 
 
 
+const allowedOrigins = [
+    "https://i-computers-frontend-rbvd.vercel.app",
+    "https://i-computers-frontend.vercel.app",
+    "http://localhost:5173",
+    "http://localhost:3000"
+];
+
 app.use(cors({
-    origin: "https://i-computers-frontend-rbvd.vercel.app",
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.includes(origin) || origin.endsWith(".vercel.app")) {
+            callback(null, true);
+        } else {
+            callback(new Error("Not allowed by CORS"));
+        }
+    },
     credentials: true
 }))
 
@@ -62,5 +75,5 @@ app.get("/", (req, res) => {
     res.send("Server is running")
 })
 
-app.listen(3000,
-    () => console.log("Server is running on port 3000"))
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
