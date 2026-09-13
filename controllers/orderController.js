@@ -1,5 +1,6 @@
 import Order from "../models/order.js";
 import Product from "../models/product.js";
+import User from "../models/user.js";
 import { isAdmin } from "./userController.js";
 
 export async function createOrder(req, res) {
@@ -98,15 +99,6 @@ export async function createOrder(req, res) {
         const order = new Order(orderData)
         await order.save()
 
-
-        //update stock of products
-
-        // for(let i=0 ; i<req.body.items.length ; i++){
-
-        //     const product = await Product.updateOne({ productId : req.body.items[i].productId }, { $inc: { stock: -req.body.items[i].qty } })
-
-        // }
-
         res.json({ message: "Order created successfully", orderId: orderData.orderId });
 
 
@@ -115,6 +107,68 @@ export async function createOrder(req, res) {
         return res.status(500).json({ message: error.message || "Internal server error" });
     }
 
+}
+
+export async function getDashboardStats(req, res) {
+    try {
+        if (!isAdmin(req)) {
+            return res.status(403).json({ message: "You are not authorized to view dashboard stats" });
+        }
+
+        const [totalUsers, totalOrders, totalProducts, users, orders] = await Promise.all([
+            User.countDocuments(),
+            Order.countDocuments(),
+            Product.countDocuments(),
+            User.find({}, { password: 0 }).sort({ _id: -1 }).limit(8),
+            Order.find().sort({ date: -1 }).limit(8)
+        ]);
+
+        // Calculate total revenue across all orders
+        const revenueAgg = await Order.aggregate([
+            { $group: { _id: null, totalRevenue: { $sum: "$totalAmount" } } }
+        ]);
+        const totalRevenue = revenueAgg.length > 0 ? revenueAgg[0].totalRevenue : 0;
+
+        // Pending and Delivered counts
+        const pendingOrders = await Order.countDocuments({ status: { $regex: /pending/i } });
+        const completedOrders = await Order.countDocuments({ status: { $regex: /delivered|completed/i } });
+
+        // Map order counts for recent users
+        const recentUserEmails = users.map(u => (u.email || "").toLowerCase());
+        const userOrderCountsAgg = await Order.aggregate([
+            { $match: { email: { $in: recentUserEmails } } },
+            { $group: { _id: { $toLower: "$email" }, count: { $sum: 1 }, totalSpent: { $sum: "$totalAmount" } } }
+        ]);
+
+        const userOrderMap = {};
+        userOrderCountsAgg.forEach(item => {
+            userOrderMap[item._id] = { count: item.count, totalSpent: item.totalSpent };
+        });
+
+        const usersWithStats = users.map(u => {
+            const userObj = u.toObject ? u.toObject() : { ...u._doc };
+            const stats = userOrderMap[(u.email || "").toLowerCase()] || { count: 0, totalSpent: 0 };
+            userObj.orderCount = stats.count;
+            userObj.totalSpent = stats.totalSpent;
+            return userObj;
+        });
+
+        return res.json({
+            stats: {
+                totalUsers,
+                totalOrders,
+                totalProducts,
+                totalRevenue,
+                pendingOrders,
+                completedOrders
+            },
+            recentUsers: usersWithStats,
+            recentOrders: orders
+        });
+    } catch (error) {
+        console.error("Error fetching dashboard stats:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
 }
 
 export async function getOrders(req, res) {
@@ -126,37 +180,43 @@ export async function getOrders(req, res) {
             return
         }
 
-        const pageSizeInString = req.params.pageSize || "10" //"3"
-        const pageNumberInString = req.params.pageNumber || "1" //"2"
+        const pageSizeInString = req.params.pageSize || "10";
+        const pageNumberInString = req.params.pageNumber || "1";
 
-        const pageSize = parseInt(pageSizeInString) //10
-        const pageNumber = parseInt(pageNumberInString) //1
+        const pageSize = parseInt(pageSizeInString) || 10;
+        const pageNumber = parseInt(pageNumberInString) || 1;
 
         if (req.user.isAdmin) {
+            let filter = {};
+            if (req.query.email) {
+                filter.email = req.query.email.trim().toLowerCase();
+            } else if (req.query.search) {
+                const searchRegex = new RegExp(req.query.search.trim(), "i");
+                filter = {
+                    $or: [
+                        { orderId: searchRegex },
+                        { email: searchRegex },
+                        { firstName: searchRegex },
+                        { lastName: searchRegex }
+                    ]
+                };
+            }
 
-            const totalOrderCount = await Order.countDocuments();
-
-            const totalPages = Math.ceil(totalOrderCount / pageSize)
-
-            const pagesNeededToBeSkipped = pageNumber - 1
-
-            const itemsNeededtoBeSkipped = pagesNeededToBeSkipped * pageSize
-
-            const orders = await Order.find().sort({ date: -1 }).skip(itemsNeededtoBeSkipped).limit(pageSize)
+            const totalOrderCount = await Order.countDocuments(filter);
+            const totalPages = Math.ceil(totalOrderCount / pageSize) || 1;
+            const pagesNeededToBeSkipped = pageNumber - 1;
+            const itemsNeededtoBeSkipped = pagesNeededToBeSkipped * pageSize;
+            const orders = await Order.find(filter).sort({ date: -1 }).skip(itemsNeededtoBeSkipped).limit(pageSize);
 
             return res.json({ orders: orders, totalPages: totalPages, currentPage: pageNumber, totalCount: totalOrderCount });
 
         } else {
 
             const totalOrderCount = await Order.countDocuments({ email: req.user.email });
-
-            const totalPages = Math.ceil(totalOrderCount / pageSize)
-
-            const pagesNeededToBeSkipped = pageNumber - 1
-
-            const itemsNeededtoBeSkipped = pagesNeededToBeSkipped * pageSize
-
-            const orders = await Order.find({ email: req.user.email }).sort({ date: -1 }).skip(itemsNeededtoBeSkipped).limit(pageSize)
+            const totalPages = Math.ceil(totalOrderCount / pageSize) || 1;
+            const pagesNeededToBeSkipped = pageNumber - 1;
+            const itemsNeededtoBeSkipped = pagesNeededToBeSkipped * pageSize;
+            const orders = await Order.find({ email: req.user.email }).sort({ date: -1 }).skip(itemsNeededtoBeSkipped).limit(pageSize);
 
             return res.json({ orders: orders, totalPages: totalPages, currentPage: pageNumber, totalCount: totalOrderCount });
 

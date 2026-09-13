@@ -1,4 +1,5 @@
 import User from "../models/user.js";
+import Order from "../models/order.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import dotenv from 'dotenv'
@@ -12,55 +13,88 @@ import axios from "axios";
 dotenv.config()
 
 export async function createUser(req, res) {
-
     try {
+        const email = (req.body.email || "").trim().toLowerCase();
+        const firstName = (req.body.firstName || req.body.firstname || "").trim();
+        const lastName = (req.body.lastName || req.body.lastname || "").trim();
         const password = req.body.password;
+
+        if (!email || !password) {
+            return res.status(400).json({ message: "Email and password are required" });
+        }
+
+        const existingUser = await User.findOne({ email: email });
+        if (existingUser != null) {
+            return res.status(400).json({ message: "This email is already registered. Please log in instead." });
+        }
+
         const passwordhash = bcrypt.hashSync(password, 10);
-        const user = new User(
-            {
-                email: req.body.email,
-                firstName: req.body.firstName,
-                lastName: req.body.lastName,
-                password: passwordhash
-            }
-        );
+        const user = new User({
+            email: email,
+            firstName: firstName || "User",
+            lastName: lastName || "",
+            password: passwordhash,
+            image: "/userGirl.jpg"
+        });
 
         await user.save();
 
-        res.json({ message: "User created successfully" });
+        const userInfo = {
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            image: user.image,
+            isEmailVerified: user.isEmailVerified,
+            isAdmin: user.isAdmin,
+            isBlocked: user.isBlocked
+        };
+
+        const jwtSecret = process.env.JWT_SECRET || "com345#89@";
+        const token = jwt.sign(userInfo, jwtSecret);
+
+        res.status(201).json({
+            message: "User registered successfully",
+            token: token,
+            isAdmin: user.isAdmin,
+            user: userInfo
+        });
 
     } catch (error) {
         console.error("Error creating user:", error);
-        return res.json({ message: "Internal server error" });
+        if (error.code === 11000) {
+            return res.status(400).json({ message: "This email is already registered. Please log in instead." });
+        }
+        return res.status(500).json({ message: "Internal server error" });
     }
-
-
 }
+
 export async function loginUser(req, res) {
     try {
-        const email = req.body.email;
+        const email = (req.body.email || "").trim().toLowerCase();
         const password = req.body.password;
+
+        if (!email || !password) {
+            return res.status(400).json({ message: "Email and password are required" });
+        }
 
         const user = await User.findOne({ email: email });
 
         if (user == null) {
-            res.status(404).json({ message: "User not found" });
+            res.status(404).json({ message: "User not found with this email" });
             return;
         }
 
         if (user.isBlocked) {
-            res.status(403).json({ message: "User is blocked" });
+            res.status(403).json({ message: "Your account is blocked. Please contact support." });
             return;
         }
 
         const isPasswordMatching = bcrypt.compareSync(password, user.password);
         if (isPasswordMatching) {
-
-
             const userInfo = {
                 email: user.email,
-                firstName: user.firstName,
-                lastName: user.lastName,
+                firstName: user.firstName || (user.email ? user.email.split("@")[0] : "User"),
+                lastName: user.lastName || "",
                 image: user.image,
                 isEmailVerified: user.isEmailVerified,
                 isAdmin: user.isAdmin,
@@ -83,32 +117,62 @@ export async function getAllUsers(req, res) {
     if (!isAdmin(req)) {
         return res.status(403).json({ message: "You are not authorized to view all users" });
     }
-    const pageSizeInString = req.params.pageSize || "10" //"3"
-    const pageNumberInString = req.params.pageNumber || "1" //"2"
+    const pageSizeInString = req.params.pageSize || "10"
+    const pageNumberInString = req.params.pageNumber || "1"
 
-    const pageSize = parseInt(pageSizeInString) //10
-    const pageNumber = parseInt(pageNumberInString) //1
-
+    const pageSize = parseInt(pageSizeInString) || 10
+    const pageNumber = parseInt(pageNumberInString) || 1
 
     try {
+        let filter = {};
+        if (req.query.search) {
+            const searchRegex = new RegExp(req.query.search.trim(), "i");
+            filter = {
+                $or: [
+                    { email: searchRegex },
+                    { firstName: searchRegex },
+                    { lastName: searchRegex }
+                ]
+            };
+        }
 
-        const totalUserCount = await User.countDocuments();
+        const totalUserCount = await User.countDocuments(filter);
+        const totalPages = Math.ceil(totalUserCount / pageSize) || 1;
+        const pagesNeededToBeSkipped = pageNumber - 1;
+        const itemsNeededtoBeSkipped = pagesNeededToBeSkipped * pageSize;
 
-        const totalPages = Math.ceil(totalUserCount / pageSize)
+        const users = await User.find(filter, { password: 0 })
+            .sort({ _id: -1 })
+            .skip(itemsNeededtoBeSkipped)
+            .limit(pageSize);
 
-        const pagesNeededToBeSkipped = pageNumber - 1
+        const userEmails = users.map(u => (u.email || "").toLowerCase());
+        const orderCounts = await Order.aggregate([
+            { $match: { email: { $in: userEmails } } },
+            { $group: { _id: { $toLower: "$email" }, count: { $sum: 1 }, totalSpent: { $sum: "$totalAmount" } } }
+        ]);
+        const orderMap = {};
+        orderCounts.forEach(o => { orderMap[o._id] = o; });
 
-        const itemsNeededtoBeSkipped = pagesNeededToBeSkipped * pageSize
+        const usersWithOrderCount = users.map(u => {
+            const obj = u.toObject ? u.toObject() : { ...u._doc };
+            const stats = orderMap[(u.email || "").toLowerCase()] || { count: 0, totalSpent: 0 };
+            obj.orderCount = stats.count;
+            obj.totalSpent = stats.totalSpent;
+            return obj;
+        });
 
-        const users = await User.find().skip(itemsNeededtoBeSkipped).limit(pageSize)
-
-        return res.json({ users: users, totalPages: totalPages, currentPage: pageNumber, totalCount: totalUserCount });
+        return res.json({
+            users: usersWithOrderCount,
+            totalPages: totalPages,
+            currentPage: pageNumber,
+            totalCount: totalUserCount
+        });
 
     } catch (error) {
         console.error("Error fetching all users:", error);
         return res.status(500).json({ message: "Internal server error" });
     }
-
 }
 export async function updateUserStatus(req, res) {
 
