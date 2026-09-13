@@ -8,6 +8,7 @@ import reviewRouter from './routes/reviewRoutes.js'
 import dotenv from 'dotenv'
 import jwt from 'jsonwebtoken'
 
+
 dotenv.config()
 
 const mongoUri = process.env.MONGO_URI
@@ -19,7 +20,13 @@ mongoose.connect(mongoUri).then(
 )
 
 const app = express()
-app.use(cors())
+
+
+
+app.use(cors({
+    origin: "https://i-computers-frontend-rbvd.vercel.app",
+    credentials: true
+}))
 
 app.use(express.json())
 
